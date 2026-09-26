@@ -24,8 +24,18 @@ import {
   getFCMToken,
   getChannels,
   toggleChannel,
+  getWatchAlertPushPreferences,
+  saveWatchAlertPushPreferences,
+  enableWatchAlertPush,
+  disableWatchAlertPush,
   type NotificationChannel,
 } from '../services/notifications'
+import {
+  InvalidPushPreferenceError,
+  type WatchAlertLevel,
+  type WatchAlertPushPreferences,
+} from '../services/watchAlertPush'
+import { WATCH_ALERT_PUSH_CONFIG } from '../config/pushNotifications'
 import { colors, radii, spacing, typography } from '../theme'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -44,6 +54,8 @@ export default function SettingsScreen() {
   const [notifEnabled, setNotifEnabled] = useState(true)
   const [channels, setChannels] = useState<NotificationChannel[]>([])
   const [pushToken, setPushTokenLocal] = useState<string | null>(null)
+  const [watchPush, setWatchPush] = useState<WatchAlertPushPreferences | null>(null)
+  const [watchPushBusy, setWatchPushBusy] = useState(false)
 
   useEffect(() => {
     loadSettings()
@@ -58,6 +70,7 @@ export default function SettingsScreen() {
 
     const notifChannels = await getChannels()
     setChannels(notifChannels)
+    setWatchPush(await getWatchAlertPushPreferences())
 
     const token = await getFCMToken()
     setPushTokenLocal(token)
@@ -98,6 +111,46 @@ export default function SettingsScreen() {
   async function handleToggleChannel(channelId: string, enabled: boolean) {
     const updated = await toggleChannel(channelId, enabled)
     setChannels(updated)
+  }
+
+  async function toggleWatchPush(value: boolean) {
+    setWatchPushBusy(true)
+    try {
+      if (value) {
+        const result = await enableWatchAlertPush()
+        if (result.status !== 'enabled') {
+          Alert.alert('Push alerts not enabled', result.reason)
+        } else {
+          setNotifEnabled(true)
+          setPushTokenLocal(result.token)
+          useStore.getState().setPushToken(result.token)
+        }
+      } else {
+        await disableWatchAlertPush()
+      }
+      setWatchPush(await getWatchAlertPushPreferences())
+      setChannels(await getChannels())
+    } finally {
+      setWatchPushBusy(false)
+    }
+  }
+
+  async function updateWatchPush(patch: Partial<WatchAlertPushPreferences>) {
+    try {
+      setWatchPush(await saveWatchAlertPushPreferences(patch))
+    } catch (error) {
+      if (error instanceof InvalidPushPreferenceError) {
+        Alert.alert('Invalid setting', error.message)
+      } else {
+        throw error
+      }
+    }
+  }
+
+  function cycleWatchPushLevel() {
+    const levels: WatchAlertLevel[] = ['info', 'warning', 'critical']
+    const current = levels.indexOf(watchPush?.minLevel ?? WATCH_ALERT_PUSH_CONFIG.defaultMinLevel)
+    updateWatchPush({ minLevel: levels[(current + 1) % levels.length] })
   }
 
   function handleNetworkChange() {
@@ -201,6 +254,57 @@ export default function SettingsScreen() {
           )}
         </Card>
 
+        <Card title="Watched Account Alerts">
+          <View style={styles.settingRow}>
+            <View style={styles.settingText}>
+              <Text style={styles.settingLabel}>Push alerts</Text>
+              <Text style={styles.settingHint}>
+                Off by default. Sends threshold and anomaly alerts for watched accounts.
+              </Text>
+            </View>
+            <Switch
+              value={!!watchPush?.enabled}
+              disabled={watchPushBusy || !watchPush}
+              onValueChange={toggleWatchPush}
+              accessibilityLabel="Push alerts for watched accounts"
+              trackColor={{ false: colors.border.default, true: colors.cyan }}
+              thumbColor={watchPush?.enabled ? colors.text.primary : colors.text.muted}
+            />
+          </View>
+
+          {watchPush?.enabled && (
+            <>
+              <View style={styles.settingRow}>
+                <Text style={styles.settingLabel}>Threshold alerts</Text>
+                <Switch
+                  value={watchPush.categories.threshold}
+                  onValueChange={(v) => updateWatchPush({ categories: { ...watchPush.categories, threshold: v } })}
+                  accessibilityLabel="Threshold alerts"
+                  trackColor={{ false: colors.border.default, true: colors.cyan }}
+                />
+              </View>
+              <View style={styles.settingRow}>
+                <Text style={styles.settingLabel}>Anomaly alerts</Text>
+                <Switch
+                  value={watchPush.categories.anomaly}
+                  onValueChange={(v) => updateWatchPush({ categories: { ...watchPush.categories, anomaly: v } })}
+                  accessibilityLabel="Anomaly alerts"
+                  trackColor={{ false: colors.border.default, true: colors.cyan }}
+                />
+              </View>
+              <TouchableOpacity
+                style={styles.settingRow}
+                onPress={cycleWatchPushLevel}
+                accessibilityRole="button"
+                accessibilityLabel={`Minimum severity: ${watchPush.minLevel}. Tap to change.`}
+              >
+                <Text style={styles.settingLabel}>Minimum severity</Text>
+                <Text style={styles.settingValue}>{watchPush.minLevel}</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </Card>
+
         <Card title="Account">
           {connectedAddress ? (
             <>
@@ -273,6 +377,10 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     color: colors.text.muted,
     marginTop: 1,
+  },
+  settingText: {
+    flex: 1,
+    paddingRight: spacing.sm,
   },
   hint: {
     fontSize: typography.fontSize.xs,
