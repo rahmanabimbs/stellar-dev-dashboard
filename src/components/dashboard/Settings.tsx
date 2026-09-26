@@ -9,6 +9,7 @@ import { ALERT_RULE_TYPE, ALERT_CHANNEL } from "../../lib/alerts";
 import PluginRegistryView from "./PluginRegistryView";
 import DataExport from "./DataExport";
 import LanguageSettings from "./LanguageSettings";
+import PreferenceSyncPanel from "../sync/PreferenceSyncPanel";
 import { revokeSentryConsent } from "../../utils/monitoring";
 
 const SESSION_API_KEY = 'stellar_custom_api_key';
@@ -444,6 +445,14 @@ export default function Settings() {
           Review installed plugins, manage permissions, and install sandboxed marketplace extensions.
         </div>
         <PluginRegistryView placement="settings" />
+      </div>
+
+      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
+        <FieldLabel>Multi-device sync</FieldLabel>
+        <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px" }}>
+          Copy a snapshot on one device and paste it on another. Settings changed on both devices are shown side by side so you can choose which to keep.
+        </div>
+        <PreferenceSyncPanel />
       </div>
 
       <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>

@@ -80,6 +80,8 @@ export interface PreferenceSyncState {
   remoteVersion?: number
   pendingChanges: number
   conflictStrategy: 'newest' | 'local' | 'remote'
+  /** ISO time of the last local write; orders writes across devices (#891). */
+  lastModifiedAt?: string
 }
 
 export interface UserPreferences {
@@ -390,6 +392,7 @@ export async function savePreferences(prefs: Partial<UserPreferences>): Promise<
   next.sync = {
     ...next.sync,
     pendingChanges: explicitPendingChanges ? prefs.sync!.pendingChanges : (current.sync?.pendingChanges || 0) + 1,
+    lastModifiedAt: new Date().toISOString(),
   }
   await setStoredValue(PREFS_KEY, next)
   return next
